@@ -2,12 +2,13 @@
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
+    <LangVersion>10</LangVersion>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>NeosEyeFaceAPI</RootNamespace>
-    <AssemblyName>NeosEyeFaceAPI</AssemblyName>
+    <RootNamespace>QuestProModule</RootNamespace>
+    <AssemblyName>QuestProModule</AssemblyName>
     <TargetFrameworkVersion>v4.6.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <Deterministic>true</Deterministic>
@@ -54,10 +55,13 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ALXR\ALXRModule.cs" />
     <Compile Include="EyeDevice.cs" />
-    <Compile Include="EyeFaceAPI.cs" />
+    <Compile Include="QuestProMod.cs" />
+    <Compile Include="FBExpression.cs" />
     <Compile Include="MouthDevice.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="IQuestProModule.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

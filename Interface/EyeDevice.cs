@@ -1,7 +1,8 @@
 ﻿using BaseX;
 using FrooxEngine;
+using static QuestProModule.ALXR.ALXRModule;
 
-namespace NeosEyeFaceAPI
+namespace QuestProModule
 {
     public class EyeDevice : IInputDriver
     {
@@ -21,52 +22,30 @@ namespace NeosEyeFaceAPI
         public void CollectDeviceInfos(DataTreeList list)
         {
             var eyeDataTreeDictionary = new DataTreeDictionary();
-            eyeDataTreeDictionary.Add("Name", "Generic Eye Tracking");
+            eyeDataTreeDictionary.Add("Name", "Quest Pro Eye Tracking");
             eyeDataTreeDictionary.Add("Type", "Eye Tracking");
-            eyeDataTreeDictionary.Add("Model", "Generic Eye Model");
+            eyeDataTreeDictionary.Add("Model", "Quest Pro");
             list.Add(eyeDataTreeDictionary);
         }
 
         public void RegisterInputs(InputInterface inputInterface)
         {
-            _eyes = new Eyes(inputInterface, "Generic Eye Tracking");
+            _eyes = new Eyes(inputInterface, "Quest Pro Eye Tracking");
         }
 
         public void UpdateInputs(float deltaTime)
         {
-            _eyes.IsEyeTrackingActive = _eyes.IsEyeTrackingActive;
+            _eyes.IsEyeTrackingActive = Engine.Current.InputInterface.VR_Active;
+            _eyes.IsTracking = Engine.Current.InputInterface.VR_Active;
 
-            UpdateEye(float3.Zero, float3.Zero, true, 0.003f, 1f, 
-                0f, 0f, 0f, deltaTime, _eyes.LeftEye);
-            UpdateEye(float3.Zero, float3.Zero, true, 0.003f, 1f, 
-                0f, 0f, 0f, deltaTime, _eyes.RightEye);
-
-            UpdateEye(float3.Zero, float3.Zero, true, 0.003f, 1f, 
-                0f, 0f, 0f, deltaTime, _eyes.CombinedEye);
+            QuestProMod.qpm.GetEyeExpressions(FBEye.Left, in _eyes.LeftEye);
+            QuestProMod.qpm.GetEyeExpressions(FBEye.Right, in _eyes.RightEye);
+            QuestProMod.qpm.GetEyeExpressions(FBEye.Combined, in _eyes.CombinedEye);
+            
             _eyes.ComputeCombinedEyeParameters();
-
             _eyes.ConvergenceDistance = 0f;
             _eyes.Timestamp += deltaTime;
             _eyes.FinishUpdate();
-        }
-
-        private void UpdateEye(float3 gazeDirection, float3 gazeOrigin, bool status, float pupilSize, float openness,
-            float widen, float squeeze, float frown, float deltaTime, Eye eye)
-        {
-            eye.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
-            eye.IsTracking = status;
-
-            if (eye.IsTracking)
-            {
-                eye.UpdateWithDirection(gazeDirection);
-                eye.RawPosition = gazeOrigin;
-                eye.PupilDiameter = pupilSize;
-            }
-
-            eye.Openness = openness;
-            eye.Widen = widen;
-            eye.Squeeze = squeeze;
-            eye.Frown = frown;
         }
     }
 }

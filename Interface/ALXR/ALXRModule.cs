@@ -298,7 +298,7 @@ namespace QuestProModule.ALXR
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_R];
                     break;
                 case FBEye.Combined:
-                    frooxEye.RawPosition = float3.Zero;
+                    frooxEye.RawPosition = MathX.Average(new float3(expressions[68], expressions[69], expressions[70]), new float3(expressions[76], expressions[77], expressions[78]));
                     frooxEye.RawRotation = MathX.Slerp(new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]), new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]), 0.5f); // Compute the midpoint by slerping from one quaternion to the other
                     frooxEye.Openness = (expressions[FBExpression.Eyes_Closed_R] + expressions[FBExpression.Eyes_Closed_R]) / 2.0f;
                     frooxEye.Squeeze = (expressions[FBExpression.Lid_Tightener_R] + expressions[FBExpression.Lid_Tightener_R]) / 2.0f;

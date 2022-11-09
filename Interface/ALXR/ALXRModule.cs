@@ -41,6 +41,8 @@ namespace QuestProModule.ALXR
         {
             try
             {
+                localAddr = QuestProMod.config.GetValue(QuestProMod.QuestProIP);
+
                 client = new TcpClient();
                 UniLog.Log($"Trying to establish a Quest Pro connection at {localAddr}:{DEFAULT_PORT}...");
 

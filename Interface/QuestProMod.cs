@@ -6,7 +6,7 @@ using QuestProModule.ALXR;
 
 namespace QuestProModule
 {
-    public class QuestProMod: NeosMod
+    public class QuestProMod : NeosMod
 	{
 		public static ModConfiguration config;
 

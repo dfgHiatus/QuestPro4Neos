@@ -1,8 +1,6 @@
 ﻿using BaseX;
 using FrooxEngine;
-using FrooxEngine.LogiX.WorldModel;
 using System;
-using System.Linq.Expressions;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -33,7 +31,7 @@ namespace QuestProModule.ALXR
             cancellationTokenSource = new CancellationTokenSource();
             ConnectToTCP(); // Will this block the main thread?
 
-            Thread tcpThread = new Thread(Update);
+            tcpThread = new Thread(Update);
             tcpThread.Start();
 
             return true;
@@ -286,14 +284,14 @@ namespace QuestProModule.ALXR
             switch (fbEye)
             {
                 case FBEye.Left:
-                    frooxEye.RawPosition = float3.Zero;
+                    frooxEye.RawPosition = new float3(expressions[68], expressions[69], expressions[70]);
                     frooxEye.RawRotation = new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]);
                     frooxEye.Openness = expressions[FBExpression.Eyes_Closed_L];
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_L];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_L];
                     break;
                 case FBEye.Right:
-                    frooxEye.RawPosition = float3.Zero;
+                    frooxEye.RawPosition = new float3(expressions[76], expressions[77], expressions[78]);
                     frooxEye.RawRotation = new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]);
                     frooxEye.Openness = expressions[FBExpression.Eyes_Closed_R];
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_R];

@@ -302,33 +302,37 @@ namespace QuestProModule.ALXR
 
         bool IsValid(float value) => !float.IsInfinity(value) && !float.IsNaN(value);
 
-        public struct XrPosef
-        {
-            public float3 position;
-            public floatQ rotation;
-        }
-
-        public struct XrEyeGazeFB
+        public struct EyeGazeData
         {
             public bool isValid;
-            public XrPosef gazePose;
+            public float3 position;
+            public floatQ rotation;
+            public float open;
+            public float squeeze;
+            public float wide;
             public float gazeConfidence;
         }
 
-        public XrEyeGazeFB GetEyeData(FBEye fbEye)
+        public EyeGazeData GetEyeData(FBEye fbEye)
         {
-            XrEyeGazeFB eyeRet = new XrEyeGazeFB();
+            EyeGazeData eyeRet = new EyeGazeData();
             switch (fbEye)
             {
                 case FBEye.Left:
-                    eyeRet.gazePose.position = new float3(expressions[68], expressions[69], expressions[70]);
-                    eyeRet.gazePose.rotation = new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]);
-                    eyeRet.isValid = IsValid(eyeRet.gazePose.position);
+                    eyeRet.position = new float3(expressions[68], expressions[70], expressions[69]);
+                    eyeRet.rotation = new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]);
+                    eyeRet.open = MathX.Max(0, expressions[FBExpression.Eyes_Closed_L]);
+                    eyeRet.squeeze = expressions[FBExpression.Lid_Tightener_L];
+                    eyeRet.wide = expressions[FBExpression.Upper_Lid_Raiser_L];
+                    eyeRet.isValid = IsValid(eyeRet.position);
                     return eyeRet;
                 case FBEye.Right:
-                    eyeRet.gazePose.position = new float3(expressions[76], expressions[77], expressions[78]);
-                    eyeRet.gazePose.rotation = new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]);
-                    eyeRet.isValid = IsValid(eyeRet.gazePose.position);
+                    eyeRet.position = new float3(expressions[76], expressions[78], expressions[77]);
+                    eyeRet.rotation = new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]);
+                    eyeRet.open = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R]);
+                    eyeRet.squeeze = expressions[FBExpression.Lid_Tightener_R];
+                    eyeRet.wide = expressions[FBExpression.Upper_Lid_Raiser_R];
+                    eyeRet.isValid = IsValid(eyeRet.position);
                     return eyeRet;
                 default:
                     throw new Exception($"Invalid eye argument: {fbEye}");

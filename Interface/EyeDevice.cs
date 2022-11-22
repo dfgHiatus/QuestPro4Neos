@@ -1,5 +1,6 @@
 ﻿using BaseX;
 using FrooxEngine;
+using QuestProModule.ALXR;
 using System;
 using System.Numerics;
 using static QuestProModule.ALXR.ALXRModule;
@@ -11,11 +12,10 @@ namespace QuestProModule
         private Eyes _eyes;
         InputInterface input;
         public int UpdateOrder => 100;
-        private float _openExponent = 1.0f;
-        public EyeDevice(float openExponent)
+
+        public EyeDevice()
         {
             Engine.Current.OnShutdown += Teardown;
-            _openExponent = openExponent;
         }
 
         private void Teardown()
@@ -44,13 +44,50 @@ namespace QuestProModule
 
             _eyes.LeftEye.IsTracking = input.VR_Active;
 
-            QuestProMod.qpm.GetEyeExpressions(FBEye.Left, _eyes.LeftEye);
-            QuestProMod.qpm.GetEyeExpressions(FBEye.Right, _eyes.RightEye);
-            QuestProMod.qpm.GetEyeExpressions(FBEye.Combined, _eyes.CombinedEye);
+            var leftEyeData = QuestProMod.qpm.GetEyeData(FBEye.Left);
+            var rightEyeData = QuestProMod.qpm.GetEyeData(FBEye.Right);
 
-            _eyes.LeftEye.Openness = MathX.Pow(_eyes.LeftEye.Openness, _openExponent);
-            _eyes.RightEye.Openness = MathX.Pow(_eyes.RightEye.Openness, _openExponent);
-            _eyes.CombinedEye.Openness = MathX.Pow(_eyes.CombinedEye.Openness, _openExponent);
+            _eyes.LeftEye.IsTracking = leftEyeData.isValid;
+            _eyes.LeftEye.RawPosition = leftEyeData.position;
+            _eyes.LeftEye.UpdateWithRotation(leftEyeData.rotation);
+            _eyes.LeftEye.PupilDiameter = 0.004f;
+            _eyes.LeftEye.Widen = leftEyeData.wide;
+            _eyes.LeftEye.Squeeze = leftEyeData.squeeze;
+            _eyes.LeftEye.Openness = leftEyeData.open;
+
+            _eyes.RightEye.IsTracking = rightEyeData.isValid;
+            _eyes.RightEye.RawPosition = rightEyeData.position;
+            _eyes.RightEye.UpdateWithRotation(rightEyeData.rotation);
+            _eyes.RightEye.PupilDiameter = 0.004f;
+            _eyes.RightEye.Widen = rightEyeData.wide;
+            _eyes.RightEye.Squeeze = rightEyeData.squeeze;
+            _eyes.RightEye.Openness = rightEyeData.open;
+
+            if (_eyes.LeftEye.IsTracking || _eyes.RightEye.IsTracking && (!_eyes.LeftEye.IsTracking || !_eyes.RightEye.IsTracking))
+            {
+                if (_eyes.LeftEye.IsTracking)
+                {
+                    _eyes.CombinedEye.RawPosition = _eyes.LeftEye.RawPosition;
+                    _eyes.CombinedEye.UpdateWithRotation(_eyes.LeftEye.RawRotation);
+                } else
+                {
+                    _eyes.CombinedEye.RawPosition = _eyes.RightEye.RawPosition;
+                    _eyes.CombinedEye.UpdateWithRotation(_eyes.RightEye.RawRotation);
+                }
+                _eyes.CombinedEye.IsTracking = true;
+            }
+            else
+            {
+                _eyes.CombinedEye.IsTracking = false;
+            }
+
+            _eyes.CombinedEye.IsTracking = _eyes.LeftEye.IsTracking || _eyes.RightEye.IsTracking;
+            _eyes.CombinedEye.RawPosition = (_eyes.LeftEye.RawPosition + _eyes.RightEye.RawPosition) * 0.5f;
+            _eyes.CombinedEye.UpdateWithRotation(MathX.Slerp(_eyes.LeftEye.RawRotation, _eyes.RightEye.RawRotation, 0.5f));
+            _eyes.CombinedEye.PupilDiameter = 0.004f;
+
+            _eyes.LeftEye.Openness = MathX.Pow(_eyes.LeftEye.Openness, QuestProMod.EyeOpenExponent);
+            _eyes.RightEye.Openness = MathX.Pow(_eyes.RightEye.Openness, QuestProMod.EyeOpenExponent);
 
             _eyes.ComputeCombinedEyeParameters();
             _eyes.ConvergenceDistance = 0f;

@@ -3,34 +3,73 @@ using NeosModLoader;
 using FrooxEngine;
 using System.Net;
 using QuestProModule.ALXR;
+using BaseX;
+using System;
+using FrooxEngine.UIX;
 
 namespace QuestProModule
 {
     public class QuestProMod : NeosMod
 	{
-		public static ModConfiguration config;
-
 		[AutoRegisterConfigKey]
-		public static ModConfigurationKey<IPAddress> QuestProIP = new ModConfigurationKey<IPAddress>("quest_pro_IP", "Quest Pro IP. This can be found in ALXR's settings, requires a restart to take effect", () => IPAddress.Parse("192.168.1.163"));
+		private readonly static ModConfigurationKey<string> QuestProIP = new ModConfigurationKey<string>("quest_pro_IP", "Quest Pro IP. This can be found in ALXR's settings, requires a restart to take effect", () => "127.0.0.1");
+
+        [AutoRegisterConfigKey]
+        private readonly static ModConfigurationKey<float> EyeOpennessExponent = new ModConfigurationKey<float>("quest_pro_eye_open_exponent", "Exponent to apply to eye openness.  Useful for applying different curves for how open your eyes are.", () => 1.0f);
 
 		public static ALXRModule qpm;
 
+        static ModConfiguration _config;
+
 		public override string Name => "QuestPro4Neos";
-		public override string Author => "dfgHiatus";
+		public override string Author => "dfgHiatus & Geenz";
 		public override string Version => "1.0.0";
 		public override string Link => "https://github.com/dfgHiatus/QuestPro4Neos";
 		public override void OnEngineInit()
 		{
-			qpm = new ALXRModule();
-			qpm.Initialize();
+            _config = GetConfiguration();
 
-			config = GetConfiguration();
-			new Harmony("net.dfgHiatus.QuestPro4Neos").PatchAll();
-			Engine.Current.InputInterface.RegisterInputDriver(new EyeDevice());
-			Engine.Current.OnReady += () =>
-				Engine.Current.InputInterface.RegisterInputDriver(new MouthDevice());
+            var openness = default(float);
 
-			Engine.Current.OnShutdown += () => qpm.Teardown();
+            if (!_config.TryGetValue(EyeOpennessExponent, out openness))
+            {
+                openness = 1.0f;
+
+                _config.Set(EyeOpennessExponent, openness);
+            }
+
+            new Harmony("net.dfgHiatus.QuestPro4Neos").PatchAll();
 		}
-	}
+
+        [HarmonyPatch(typeof(InputInterface), MethodType.Constructor)]
+        [HarmonyPatch(new Type[] { typeof(Engine) })]
+        public class InputInterfaceCtorPatch
+        {
+            public static void Postfix(InputInterface __instance)
+            {
+                try
+                {
+                    qpm = new ALXRModule();
+
+                    qpm.Initialize(_config.GetValue(QuestProIP));
+
+                    __instance.RegisterInputDriver(new EyeDevice(_config.GetValue(EyeOpennessExponent)));
+                    __instance.RegisterInputDriver(new MouthDevice());
+
+                    Engine.Current.OnShutdown += () => qpm.Teardown();
+                }
+                catch (Exception ex)
+                {
+                    Warn("Module failed to initiallize.");
+                    Warn(ex.ToString());
+                }
+            }
+        }
+
+        private void OnConfigurationChanged(ConfigurationChangedEvent @event)
+        {
+            if (@event.Label == "NeosModSettings variable change") return;
+
+        }
+    }
 }

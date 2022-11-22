@@ -4,6 +4,8 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Tasks;
+using NeosModLoader;
 
 namespace QuestProModule.ALXR
 {
@@ -25,34 +27,54 @@ namespace QuestProModule.ALXR
 
         private double pitch_L, yaw_L, pitch_R, yaw_R; // Eye rotations
 
-        public bool Initialize()
-        {
-            localAddr = QuestProMod.config.GetValue(QuestProMod.QuestProIP);
-            cancellationTokenSource = new CancellationTokenSource();
-            ConnectToTCP(); // Will this block the main thread?
-
-            tcpThread = new Thread(Update);
-            tcpThread.Start();
-
-            return true;
-        }
-
-        private bool ConnectToTCP()
+        public async Task<bool> Initialize(string ipconfig)
         {
             try
             {
-                localAddr = QuestProMod.config.GetValue(QuestProMod.QuestProIP);
+                localAddr = IPAddress.Parse(ipconfig);
 
+                cancellationTokenSource = new CancellationTokenSource();
+
+                UniLog.Log("Attempting to connect to TCP socket.");
+                var connected = await ConnectToTCP(); // Will this block the main thread?
+            } catch (Exception e)
+            {
+                UniLog.Error(e.Message);
+                return false;
+            }
+
+            if (connected) {
+                tcpThread = new Thread(Update);
+                tcpThread.Start();
+                return true;
+            }
+
+            return false;
+        }
+
+        private async Task<bool> ConnectToTCP()
+        {
+            try
+            {
                 client = new TcpClient();
                 UniLog.Log($"Trying to establish a Quest Pro connection at {localAddr}:{DEFAULT_PORT}...");
 
-                client.Connect(localAddr, DEFAULT_PORT);
-                UniLog.Log("Connected to Quest Pro!");
+                await client.ConnectAsync(localAddr, DEFAULT_PORT);
 
-                stream = client.GetStream();
-                connected = true;
+                if (client.Connected)
+                {
 
-                return true;
+                    UniLog.Log("Connected to Quest Pro!");
+
+                    stream = client.GetStream();
+                    connected = true;
+
+                    return true;
+                } else
+                {
+                    UniLog.Error("Couldn't connect!");
+                    return false;
+                }
             }
             catch (Exception e)
             {
@@ -70,7 +92,7 @@ namespace QuestProModule.ALXR
                     // Attempt reconnection if needed
                     if (!connected || stream == null)
                     {
-                        ConnectToTCP();
+                        ConnectToTCP().RunSynchronously();
                     }
 
                     // If the connection was unsuccessful, wait a bit and try again
@@ -276,41 +298,80 @@ namespace QuestProModule.ALXR
             client.Dispose();
         }
 
-        public void GetEyeExpressions(FBEye fbEye, in FrooxEngine.Eye frooxEye)
+        bool IsValid(float3 value) => IsValid(value.x) && IsValid(value.y) && IsValid(value.z);
+
+        bool IsValid(float value) => !float.IsInfinity(value) && !float.IsNaN(value);
+
+        public struct XrPosef
         {
-            frooxEye.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
-            frooxEye.IsTracking = Engine.Current.InputInterface.VR_Active;
-            frooxEye.PupilDiameter = 0.0035f;
-            frooxEye.Frown = 0f;
-            
+            public float3 position;
+            public floatQ rotation;
+        }
+
+        public struct XrEyeGazeFB
+        {
+            public bool isValid;
+            public XrPosef gazePose;
+            public float gazeConfidence;
+        }
+
+        public XrEyeGazeFB GetEyeData(FBEye fbEye)
+        {
+            XrEyeGazeFB eyeRet = new XrEyeGazeFB();
             switch (fbEye)
             {
                 case FBEye.Left:
-                    frooxEye.RawPosition = new float3(expressions[68], expressions[69], expressions[70]);
-                    frooxEye.RawRotation = new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]);
-                    frooxEye.Openness = expressions[FBExpression.Eyes_Closed_L];
+                    eyeRet.gazePose.position = new float3(expressions[68], expressions[69], expressions[70]);
+                    eyeRet.gazePose.rotation = new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]);
+                    eyeRet.isValid = IsValid(eyeRet.gazePose.position);
+                    return eyeRet;
+                case FBEye.Right:
+                    eyeRet.gazePose.position = new float3(expressions[76], expressions[77], expressions[78]);
+                    eyeRet.gazePose.rotation = new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]);
+                    eyeRet.isValid = IsValid(eyeRet.gazePose.position);
+                    return eyeRet;
+                default:
+                    throw new Exception($"Invalid eye argument: {fbEye}");
+            }
+        }
+
+        public void GetEyeExpressions(FBEye fbEye, FrooxEngine.Eye frooxEye)
+        {
+            frooxEye.PupilDiameter = 0.004f;
+            frooxEye.Frown = 0f;
+
+            switch (fbEye)
+            {
+                case FBEye.Left:
+                    frooxEye.UpdateWithRotation(new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]));
+                    frooxEye.RawPosition = new float3(expressions[68], expressions[70], expressions[69]);
+                    frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_L]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_L];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_L];
                     break;
                 case FBEye.Right:
-                    frooxEye.RawPosition = new float3(expressions[76], expressions[77], expressions[78]);
-                    frooxEye.RawRotation = new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]);
-                    frooxEye.Openness = expressions[FBExpression.Eyes_Closed_R];
+                    frooxEye.UpdateWithRotation(new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]));
+                    frooxEye.RawPosition = new float3(expressions[76], expressions[78], expressions[77]);
+                    frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_R];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_R];
                     break;
                 case FBEye.Combined:
+                    frooxEye.UpdateWithRotation(MathX.Slerp(new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]), new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]), 0.5f));
                     frooxEye.RawPosition = MathX.Average(new float3(expressions[68], expressions[69], expressions[70]), new float3(expressions[76], expressions[77], expressions[78]));
-                    frooxEye.RawRotation = MathX.Slerp(new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]), new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]), 0.5f); // Compute the midpoint by slerping from one quaternion to the other
-                    frooxEye.Openness = (expressions[FBExpression.Eyes_Closed_R] + expressions[FBExpression.Eyes_Closed_R]) / 2.0f;
+                    frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R] + expressions[FBExpression.Eyes_Closed_R]) / 2.0f;
                     frooxEye.Squeeze = (expressions[FBExpression.Lid_Tightener_R] + expressions[FBExpression.Lid_Tightener_R]) / 2.0f;
                     frooxEye.Widen = (expressions[FBExpression.Upper_Lid_Raiser_R] + expressions[FBExpression.Upper_Lid_Raiser_R]) / 2.0f;
                     break;
             }
+
+            frooxEye.IsTracking = IsValid(frooxEye.RawPosition);
+            frooxEye.IsTracking = IsValid(frooxEye.Direction);
+            frooxEye.IsTracking = IsValid(frooxEye.Openness);
         }
 
         // TODO: Double check jaw movements and mappings
-        public void GetFacialExpressions(in FrooxEngine.Mouth mouth)
+        public void GetFacialExpressions(FrooxEngine.Mouth mouth)
         {
             mouth.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
             mouth.IsTracking = Engine.Current.InputInterface.VR_Active;

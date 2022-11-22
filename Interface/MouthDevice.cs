@@ -34,7 +34,7 @@ namespace QuestProModule
 
         public void UpdateInputs(float deltaTime)
         {
-            QuestProMod.qpm.GetFacialExpressions(in mouth);
+            QuestProMod.qpm.GetFacialExpressions(mouth);
         }
     }
 }

@@ -1,6 +1,6 @@
 # QuestPro4Neos
 
-A [NeosModLoader](https://github.com/zkxs/NeosModLoader) mod for that brings the Quest Pro's [eye tracking](https://developer.oculus.com/documentation/unity/move-eye-tracking/) and [natural expressions](https://developer.oculus.com/documentation/unity/move-face-tracking/) to [Neos VR](https://neos.com/) avatars.
+A [NeosModLoader](https://github.com/zkxs/NeosModLoader) mod that brings the Quest Pro's [eye tracking](https://developer.oculus.com/documentation/unity/move-eye-tracking/) and [natural expressions](https://developer.oculus.com/documentation/unity/move-face-tracking/) to [Neos VR](https://neos.com/) avatars.
 
 Related issues on the Neos Github:
 1. https://github.com/Neos-Metaverse/NeosPublic/issues/1140

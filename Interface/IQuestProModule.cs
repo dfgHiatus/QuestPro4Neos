@@ -1,8 +1,11 @@
-﻿namespace QuestProModule
+﻿using System.Threading.Tasks;
+using NeosModLoader;
+
+namespace QuestProModule
 {
     public interface IQuestProModule
     {
-        public bool Initialize();
+        public Task<bool> Initialize(string ipaddress);
 
         public void Update();
 

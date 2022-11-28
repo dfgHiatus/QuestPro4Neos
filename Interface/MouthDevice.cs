@@ -7,6 +7,7 @@ namespace QuestProModule
     {
         private Mouth mouth;
         public int UpdateOrder => 100;
+        private InputInterface _input;
 
         public MouthDevice()
         {
@@ -22,7 +23,7 @@ namespace QuestProModule
         {
             var mouthDataTreeDictionary = new DataTreeDictionary();
             mouthDataTreeDictionary.Add("Name", "Quest Pro Face Tracking");
-            mouthDataTreeDictionary.Add("Type", "Face Tracking");
+            mouthDataTreeDictionary.Add("Type", "Lip Tracking");
             mouthDataTreeDictionary.Add("Model", "Quest Pro");
             list.Add(mouthDataTreeDictionary);
         }
@@ -30,11 +31,12 @@ namespace QuestProModule
         public void RegisterInputs(InputInterface inputInterface)
         {
             mouth = new Mouth(inputInterface, "Quest Pro Mouth Tracking");
+            _input = inputInterface;
         }
 
         public void UpdateInputs(float deltaTime)
         {
-            QuestProMod.qpm.GetFacialExpressions(in mouth);
+            QuestProMod.qpm.GetFacialExpressions(mouth);
         }
     }
 }

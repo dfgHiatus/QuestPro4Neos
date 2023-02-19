@@ -382,17 +382,21 @@ namespace QuestProModule.ALXR
             mouth.IsTracking = Engine.Current.InputInterface.VR_Active;
 
             mouth.JawOpen = expressions[FBExpression.Jaw_Drop];
-            
-            mouth.Jaw = new float3( 
-                expressions[FBExpression.Jaw_Sideways_Right] - expressions[FBExpression.Jaw_Sideways_Left],
-                expressions[FBExpression.Jaw_Thrust],
-                0f
+
+            var jawHorizontal = expressions[FBExpression.Jaw_Sideways_Right] - expressions[FBExpression.Jaw_Sideways_Left];
+            var jawForward = expressions[FBExpression.Jaw_Thrust];
+            var jawDown = expressions[FBExpression.Lips_Toward] + expressions[FBExpression.Jaw_Drop];
+
+            mouth.Jaw = new float3(
+                jawHorizontal,
+                jawForward,
+                jawDown
             );
 
-            mouth.LipUpperLeftRaise = expressions[FBExpression.Mouth_Left];
-            mouth.LipUpperRightRaise = expressions[FBExpression.Mouth_Right];
-            mouth.LipLowerLeftRaise = expressions[FBExpression.Mouth_Left];
-            mouth.LipLowerRightRaise = expressions[FBExpression.Mouth_Right];
+            mouth.LipUpperLeftRaise = expressions[FBExpression.Mouth_Left] + expressions[FBExpression.Upper_Lip_Raiser_L];
+            mouth.LipUpperRightRaise = expressions[FBExpression.Mouth_Right] + expressions[FBExpression.Upper_Lip_Raiser_R];
+            mouth.LipLowerLeftRaise = expressions[FBExpression.Mouth_Left] + expressions[FBExpression.Lower_Lip_Depressor_L];
+            mouth.LipLowerRightRaise = expressions[FBExpression.Mouth_Right] + expressions[FBExpression.Lower_Lip_Depressor_R];
 
             var stretch = (expressions[FBExpression.Lip_Stretcher_L] + expressions[FBExpression.Lip_Stretcher_R]) / 2;
             mouth.LipUpperHorizontal = stretch;

@@ -384,7 +384,7 @@ namespace QuestProModule.ALXR
             mouth.JawOpen = expressions[FBExpression.Jaw_Drop];
             
             mouth.Jaw = new float3( 
-                expressions[FBExpression.Jaw_Sideways_Left] - expressions[FBExpression.Jaw_Sideways_Right],
+                expressions[FBExpression.Jaw_Sideways_Right] - expressions[FBExpression.Jaw_Sideways_Left],
                 expressions[FBExpression.Jaw_Thrust],
                 0f
             );

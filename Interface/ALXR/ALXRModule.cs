@@ -5,7 +5,6 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
-using NeosModLoader;
 
 namespace QuestProModule.ALXR
 {
@@ -36,14 +35,16 @@ namespace QuestProModule.ALXR
                 cancellationTokenSource = new CancellationTokenSource();
 
                 UniLog.Log("Attempting to connect to TCP socket.");
-                var connected = await ConnectToTCP(); // Will this block the main thread?
-            } catch (Exception e)
+                var connected = await ConnectToTCP(); // This should not block the main thread anymore...?
+            } 
+            catch (Exception e)
             {
                 UniLog.Error(e.Message);
                 return false;
             }
 
-            if (connected) {
+            if (connected) 
+            {
                 tcpThread = new Thread(Update);
                 tcpThread.Start();
                 return true;
@@ -63,14 +64,14 @@ namespace QuestProModule.ALXR
 
                 if (client.Connected)
                 {
-
                     UniLog.Log("Connected to Quest Pro!");
 
                     stream = client.GetStream();
                     connected = true;
 
                     return true;
-                } else
+                } 
+                else
                 {
                     UniLog.Error("Couldn't connect!");
                     return false;
@@ -104,7 +105,7 @@ namespace QuestProModule.ALXR
 
                     if (!stream.CanRead)
                     {
-                        UniLog.Warning("Can't read from network stream just yet! Trying again...");
+                        UniLog.Warning("Can't read from the Quest Pro network stream just yet! Trying again...");
                         return;
                     }
 
@@ -135,6 +136,7 @@ namespace QuestProModule.ALXR
 
                     // We receive information from the stream as a byte array 63*4 bytes long, since floats are 32 bits long and we have 63 expressions.
                     // We then need to convert these bytes to a floats. I've opted to use Buffer.BlockCopy instead of BitConverter.ToSingle, since it's faster.
+                    // Future note: Testing this against Array.Copy() doesn't seem to show any difference in performance, so I'll stick to this
                     Buffer.BlockCopy(rawExpressions, 0, expressions, 0, NATURAL_EXPRESSIONS_COUNT * 4 + (8 * 2 * 4));
 
                     // Preprocess our expressions per Meta's Documentation
@@ -145,7 +147,6 @@ namespace QuestProModule.ALXR
                     UniLog.Error(e.Message);
                     Thread.Sleep(1000);
                 }
-                
             }         
         }
     
@@ -153,10 +154,10 @@ namespace QuestProModule.ALXR
         {
             // Eye Expressions
 
-            double q_x = expressions[64];
-            double q_y = expressions[65];
-            double q_z = expressions[66];
-            double q_w = expressions[67];
+            double q_x = expressions[FBExpression.LeftRot_x];
+            double q_y = expressions[FBExpression.LeftRot_y];
+            double q_z = expressions[FBExpression.LeftRot_z];
+            double q_w = expressions[FBExpression.LeftRot_w];
 
             double yaw = Math.Atan2(2.0 * (q_y * q_z + q_w * q_x), q_w * q_w - q_x * q_x - q_y * q_y + q_z * q_z);
             double pitch = Math.Asin(-2.0 * (q_x * q_z - q_w * q_y));
@@ -167,10 +168,10 @@ namespace QuestProModule.ALXR
             pitch_L = 180.0 / Math.PI * pitch; 
             yaw_L = 180.0 / Math.PI * yaw;
 
-            q_x = expressions[72];
-            q_y = expressions[73];
-            q_z = expressions[74];
-            q_w = expressions[75];
+            q_x = expressions[FBExpression.RightRot_x];
+            q_y = expressions[FBExpression.RightRot_y];
+            q_z = expressions[FBExpression.RightRot_z];
+            q_w = expressions[FBExpression.RightRot_w];
 
             yaw = Math.Atan2(2.0 * (q_y * q_z + q_w * q_x), q_w * q_w - q_x * q_x - q_y * q_y + q_z * q_z);
             pitch = Math.Asin(-2.0 * (q_x * q_z - q_w * q_y));
@@ -319,16 +320,16 @@ namespace QuestProModule.ALXR
             switch (fbEye)
             {
                 case FBEye.Left:
-                    eyeRet.position = new float3(expressions[68], expressions[70], expressions[69]);
-                    eyeRet.rotation = new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]);
+                    eyeRet.position = new float3(expressions[FBExpression.LeftPos_x], expressions[FBExpression.LeftPos_y], expressions[FBExpression.LeftPos_z]);
+                    eyeRet.rotation = new floatQ(-expressions[FBExpression.LeftRot_x], -expressions[FBExpression.LeftRot_z], -expressions[FBExpression.LeftRot_y], expressions[FBExpression.LeftRot_w]);
                     eyeRet.open = MathX.Max(0, expressions[FBExpression.Eyes_Closed_L]);
                     eyeRet.squeeze = expressions[FBExpression.Lid_Tightener_L];
                     eyeRet.wide = expressions[FBExpression.Upper_Lid_Raiser_L];
                     eyeRet.isValid = IsValid(eyeRet.position);
                     return eyeRet;
                 case FBEye.Right:
-                    eyeRet.position = new float3(expressions[76], expressions[78], expressions[77]);
-                    eyeRet.rotation = new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]);
+                    eyeRet.position = new float3(expressions[FBExpression.RightPos_x], expressions[FBExpression.RightPos_y], expressions[FBExpression.RightPos_z]);
+                    eyeRet.rotation = new floatQ(-expressions[FBExpression.RightRot_x], -expressions[FBExpression.RightRot_z], -expressions[FBExpression.RightRot_y], expressions[FBExpression.RightRot_w]);
                     eyeRet.open = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R]);
                     eyeRet.squeeze = expressions[FBExpression.Lid_Tightener_R];
                     eyeRet.wide = expressions[FBExpression.Upper_Lid_Raiser_R];
@@ -347,22 +348,22 @@ namespace QuestProModule.ALXR
             switch (fbEye)
             {
                 case FBEye.Left:
-                    frooxEye.UpdateWithRotation(new floatQ(-expressions[64], -expressions[66], -expressions[65], expressions[67]));
-                    frooxEye.RawPosition = new float3(expressions[68], expressions[70], expressions[69]);
+                    frooxEye.UpdateWithRotation(new floatQ(-expressions[FBExpression.LeftRot_x], -expressions[FBExpression.LeftRot_z], -expressions[FBExpression.LeftRot_y], expressions[FBExpression.LeftRot_w]));
+                    frooxEye.RawPosition = new float3(expressions[FBExpression.LeftPos_x], expressions[FBExpression.LeftPos_y], expressions[FBExpression.LeftPos_z]);
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_L]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_L];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_L];
                     break;
                 case FBEye.Right:
-                    frooxEye.UpdateWithRotation(new floatQ(-expressions[72], -expressions[74], -expressions[73], expressions[75]));
-                    frooxEye.RawPosition = new float3(expressions[76], expressions[78], expressions[77]);
+                    frooxEye.UpdateWithRotation(new floatQ(-expressions[FBExpression.RightRot_x], -expressions[FBExpression.RightRot_z], -expressions[FBExpression.RightRot_y], expressions[FBExpression.RightRot_w]));
+                    frooxEye.RawPosition = new float3(expressions[FBExpression.RightPos_x], expressions[FBExpression.RightPos_y], expressions[FBExpression.RightPos_z]);
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_R];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_R];
                     break;
                 case FBEye.Combined:
-                    frooxEye.UpdateWithRotation(MathX.Slerp(new floatQ(expressions[64], expressions[65], expressions[66], expressions[67]), new floatQ(expressions[72], expressions[73], expressions[74], expressions[75]), 0.5f));
-                    frooxEye.RawPosition = MathX.Average(new float3(expressions[68], expressions[69], expressions[70]), new float3(expressions[76], expressions[77], expressions[78]));
+                    frooxEye.UpdateWithRotation(MathX.Slerp(new floatQ(expressions[FBExpression.LeftRot_x], expressions[FBExpression.LeftRot_y], expressions[FBExpression.LeftRot_z], expressions[FBExpression.LeftRot_w]), new floatQ(expressions[FBExpression.RightRot_x], expressions[FBExpression.RightRot_y], expressions[FBExpression.RightRot_z], expressions[FBExpression.RightRot_w]), 0.5f));
+                    frooxEye.RawPosition = MathX.Average(new float3(expressions[FBExpression.LeftPos_x], expressions[FBExpression.LeftPos_z], expressions[FBExpression.LeftPos_y]), new float3(expressions[FBExpression.RightPos_x], expressions[FBExpression.RightPos_z], expressions[FBExpression.RightPos_y]));
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R] + expressions[FBExpression.Eyes_Closed_R]) / 2.0f;
                     frooxEye.Squeeze = (expressions[FBExpression.Lid_Tightener_R] + expressions[FBExpression.Lid_Tightener_R]) / 2.0f;
                     frooxEye.Widen = (expressions[FBExpression.Upper_Lid_Raiser_R] + expressions[FBExpression.Upper_Lid_Raiser_R]) / 2.0f;
@@ -397,8 +398,8 @@ namespace QuestProModule.ALXR
             mouth.LipUpperHorizontal = stretch;
             mouth.LipLowerHorizontal = stretch;
 
-            mouth.MouthLeftSmileFrown = Math.Min(1, expressions[FBExpression.Lip_Corner_Puller_L] * 1.2f) - Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_L] + expressions[FBExpression.Lip_Stretcher_L]) * 0.75f);//Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_L]) * 1.5f);;
-            mouth.MouthRightSmileFrown = Math.Min(1, expressions[FBExpression.Lip_Corner_Puller_R] * 1.2f) - Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_R] + expressions[FBExpression.Lip_Stretcher_R]) * 0.75f);//Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_R]) * 1.5f);;
+            mouth.MouthLeftSmileFrown = Math.Min(1, expressions[FBExpression.Lip_Corner_Puller_L] * 1.2f) - Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_L] + expressions[FBExpression.Lip_Stretcher_L]) * SRANIPAL_NORMALIZER);//Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_L]) * 1.5f);;
+            mouth.MouthRightSmileFrown = Math.Min(1, expressions[FBExpression.Lip_Corner_Puller_R] * 1.2f) - Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_R] + expressions[FBExpression.Lip_Stretcher_R]) * SRANIPAL_NORMALIZER);//Math.Min(1, (expressions[FBExpression.Lip_Corner_Depressor_R]) * 1.5f);;
             
             mouth.MouthPout = (expressions[FBExpression.Lip_Pucker_L] + expressions[FBExpression.Lip_Pucker_R]) / 3;
 

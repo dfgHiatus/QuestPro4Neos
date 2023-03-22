@@ -52,8 +52,7 @@ namespace QuestProModule
 
                     qpm.Initialize(_config.GetValue(QuestProIP));
 
-                    __instance.RegisterInputDriver(new EyeDevice());
-                    __instance.RegisterInputDriver(new MouthDevice());
+                    __instance.RegisterInputDriver(qpm);
 
                     Engine.Current.OnShutdown += () => qpm.Teardown();
                 }

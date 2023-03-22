@@ -1,5 +1,6 @@
 ﻿using BaseX;
 using FrooxEngine;
+using FrooxEngine.LogiX;
 using System;
 using System.Net;
 using System.Net.Sockets;
@@ -8,11 +9,11 @@ using System.Threading.Tasks;
 
 namespace QuestProModule.ALXR
 {
-    public class ALXRModule : IQuestProModule
+    public class ALXRModule : IQuestProModule, IInputDriver
     {
         private IPAddress localAddr;
         private const int DEFAULT_PORT = 13191;
-        
+
         private TcpClient client;
         private NetworkStream stream;
         private Thread tcpThread;
@@ -25,6 +26,13 @@ namespace QuestProModule.ALXR
         private float[] expressions = new float[NATURAL_EXPRESSIONS_COUNT + (8 * 2)];
 
         private double pitch_L, yaw_L, pitch_R, yaw_R; // Eye rotations
+
+        #region NEOS VARIABLES
+        private InputInterface _input;
+        public int UpdateOrder => 100;
+        private Mouth _mouth;
+        private Eyes _eyes;
+        #endregion
 
         public async Task<bool> Initialize(string ipconfig)
         {
@@ -264,7 +272,7 @@ namespace QuestProModule.ALXR
                 expressions[FBExpression.Eyes_Look_Down_L] = Math.Min(1, (float)((-yaw_L) / 27.0)) * SRANIPAL_NORMALIZER;
             }
 
-
+            
             if (pitch_R > 0)
             {
                 expressions[FBExpression.Eyes_Look_Left_R] = Math.Min(1, (float)(pitch_R / 29.0)) * SRANIPAL_NORMALIZER;
@@ -300,8 +308,11 @@ namespace QuestProModule.ALXR
         }
 
         bool IsValid(float3 value) => IsValid(value.x) && IsValid(value.y) && IsValid(value.z);
+        bool IsValid(floatQ value) => IsValid(value.x) && IsValid(value.y) && IsValid(value.z) && IsValid(value.w) && InRange(value.x, new float2(1, -1)) && InRange(value.y, new float2(1, -1)) && InRange(value.z, new float2(1, -1)) && InRange(value.w, new float2(1, -1));
 
         bool IsValid(float value) => !float.IsInfinity(value) && !float.IsNaN(value);
+
+        bool InRange(float value, float2 range) => (value <= range.x && value >= range.y);
 
         public struct EyeGazeData
         {
@@ -343,7 +354,6 @@ namespace QuestProModule.ALXR
         public void GetEyeExpressions(FBEye fbEye, FrooxEngine.Eye frooxEye)
         {
             frooxEye.PupilDiameter = 0.004f;
-            frooxEye.Frown = 0f;
 
             switch (fbEye)
             {
@@ -353,6 +363,7 @@ namespace QuestProModule.ALXR
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_L]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_L];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_L];
+                    frooxEye.Frown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L];
                     break;
                 case FBEye.Right:
                     frooxEye.UpdateWithRotation(new floatQ(-expressions[FBExpression.RightRot_x], -expressions[FBExpression.RightRot_z], -expressions[FBExpression.RightRot_y], expressions[FBExpression.RightRot_w]));
@@ -360,6 +371,7 @@ namespace QuestProModule.ALXR
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R]);
                     frooxEye.Squeeze = expressions[FBExpression.Lid_Tightener_R];
                     frooxEye.Widen = expressions[FBExpression.Upper_Lid_Raiser_R];
+                    frooxEye.Frown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R];
                     break;
                 case FBEye.Combined:
                     frooxEye.UpdateWithRotation(MathX.Slerp(new floatQ(expressions[FBExpression.LeftRot_x], expressions[FBExpression.LeftRot_y], expressions[FBExpression.LeftRot_z], expressions[FBExpression.LeftRot_w]), new floatQ(expressions[FBExpression.RightRot_x], expressions[FBExpression.RightRot_y], expressions[FBExpression.RightRot_z], expressions[FBExpression.RightRot_w]), 0.5f));
@@ -367,6 +379,7 @@ namespace QuestProModule.ALXR
                     frooxEye.Openness = MathX.Max(0, expressions[FBExpression.Eyes_Closed_R] + expressions[FBExpression.Eyes_Closed_R]) / 2.0f;
                     frooxEye.Squeeze = (expressions[FBExpression.Lid_Tightener_R] + expressions[FBExpression.Lid_Tightener_R]) / 2.0f;
                     frooxEye.Widen = (expressions[FBExpression.Upper_Lid_Raiser_R] + expressions[FBExpression.Upper_Lid_Raiser_R]) / 2.0f;
+                    frooxEye.Frown = (expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R]) + (expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L]) / 2.0f;
                     break;
             }
             
@@ -375,56 +388,179 @@ namespace QuestProModule.ALXR
             frooxEye.IsTracking = IsValid(frooxEye.Openness);
         }
 
-        // TODO: Double check jaw movements and mappings
-        public void GetFacialExpressions(FrooxEngine.Mouth mouth)
+        #region IINPUTDRIVER METHODS
+        /// <summary>
+        /// Registers the eye and lip tracking devices with Neos.
+        /// </summary>
+        /// <param name="list"></param>
+        public void CollectDeviceInfos(DataTreeList list)
         {
-            mouth.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
-            mouth.IsTracking = Engine.Current.InputInterface.VR_Active;
+            var eyeDataTreeDictionary = new DataTreeDictionary();
+            eyeDataTreeDictionary.Add("Name", "Quest Pro Eye Tracking");
+            eyeDataTreeDictionary.Add("Type", "Eye Tracking");
+            eyeDataTreeDictionary.Add("Model", "Quest Pro");
+            list.Add(eyeDataTreeDictionary);
 
-            mouth.JawOpen = expressions[FBExpression.Jaw_Drop];
+            var mouthDataTreeDictionary = new DataTreeDictionary();
+            mouthDataTreeDictionary.Add("Name", "Quest Pro Face Tracking");
+            mouthDataTreeDictionary.Add("Type", "Lip Tracking");
+            mouthDataTreeDictionary.Add("Model", "Quest Pro");
+            list.Add(mouthDataTreeDictionary);
+        }
+
+        /// <summary>
+        /// Sets up the input interfaces for the eyes and mouth data.
+        /// </summary>
+        /// <param name="inputInterface"></param>
+        public void RegisterInputs(InputInterface inputInterface)
+        {
+            _input = inputInterface;
+            _eyes = new Eyes(_input, "Quest Pro Eye Tracking");
+            _mouth = new Mouth(_input, "Quest Pro Face Tracking");
+        }
+
+        /// <summary>
+        /// Gets called every frame to update any inputs.
+        /// </summary>
+        /// <param name="deltaTime"></param>
+        public void UpdateInputs(float deltaTime)
+        {
+            UpdateMouth(deltaTime);
+            UpdateEyes(deltaTime);
+        }
+
+        void UpdateEye(Eye eye, EyeGazeData data)
+        {
+            bool _isValid = IsValid(data.open);
+            _isValid &= IsValid(data.position);
+            _isValid &= IsValid(data.wide);
+            _isValid &= IsValid(data.squeeze);
+            _isValid &= IsValid(data.rotation);
+            _isValid &= eye.IsTracking;
+
+            eye.IsTracking = _isValid;
+
+            if (eye.IsTracking)
+            {
+                eye.UpdateWithRotation(data.rotation);
+                eye.Openness = MathX.FilterInvalid(eye.Openness, 0.0f);
+            }
+        }
+
+        /// <summary>
+        /// Updates our eye tracking data.
+        /// </summary>
+        /// <param name="deltaTime"></param>
+        void UpdateEyes(float deltaTime)
+        {
+            _eyes.IsEyeTrackingActive = _input.VR_Active;
+
+            _eyes.LeftEye.IsTracking = _input.VR_Active;
+
+            var leftEyeData = QuestProMod.qpm.GetEyeData(FBEye.Left);
+            var rightEyeData = QuestProMod.qpm.GetEyeData(FBEye.Right);
+
+            _eyes.LeftEye.IsTracking = leftEyeData.isValid;
+            _eyes.LeftEye.RawPosition = leftEyeData.position;
+            _eyes.LeftEye.PupilDiameter = 0.004f;
+            _eyes.LeftEye.Widen = leftEyeData.wide;
+            _eyes.LeftEye.Squeeze = leftEyeData.squeeze;
+            _eyes.LeftEye.Openness = leftEyeData.open;
+            _eyes.LeftEye.Frown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L];
+
+            UpdateEye(_eyes.LeftEye, leftEyeData);
+
+            _eyes.RightEye.IsTracking = rightEyeData.isValid;
+            _eyes.RightEye.RawPosition = rightEyeData.position;
+            _eyes.RightEye.PupilDiameter = 0.004f;
+            _eyes.RightEye.Widen = rightEyeData.wide;
+            _eyes.RightEye.Squeeze = rightEyeData.squeeze;
+            _eyes.RightEye.Openness = rightEyeData.open;
+            _eyes.RightEye.Frown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R];
+
+            UpdateEye(_eyes.RightEye, rightEyeData);
+
+            if (_eyes.LeftEye.IsTracking || _eyes.RightEye.IsTracking && (!_eyes.LeftEye.IsTracking || !_eyes.RightEye.IsTracking))
+            {
+                if (_eyes.LeftEye.IsTracking)
+                {
+                    _eyes.CombinedEye.RawPosition = _eyes.LeftEye.RawPosition;
+                    _eyes.CombinedEye.UpdateWithRotation(_eyes.LeftEye.RawRotation);
+                }
+                else
+                {
+                    _eyes.CombinedEye.RawPosition = _eyes.RightEye.RawPosition;
+                    _eyes.CombinedEye.UpdateWithRotation(_eyes.RightEye.RawRotation);
+                }
+                _eyes.CombinedEye.IsTracking = true;
+            }
+            else
+            {
+                _eyes.CombinedEye.IsTracking = false;
+            }
+
+            _eyes.CombinedEye.IsTracking = _eyes.LeftEye.IsTracking || _eyes.RightEye.IsTracking;
+            _eyes.CombinedEye.RawPosition = (_eyes.LeftEye.RawPosition + _eyes.RightEye.RawPosition) * 0.5f;
+            _eyes.CombinedEye.UpdateWithRotation(MathX.Slerp(_eyes.LeftEye.RawRotation, _eyes.RightEye.RawRotation, 0.5f));
+            _eyes.CombinedEye.PupilDiameter = 0.004f;
+
+            _eyes.LeftEye.Openness = MathX.Pow(_eyes.LeftEye.Openness, QuestProMod.EyeOpenExponent);
+            _eyes.RightEye.Openness = MathX.Pow(_eyes.RightEye.Openness, QuestProMod.EyeOpenExponent);
+
+            _eyes.ComputeCombinedEyeParameters();
+            _eyes.ConvergenceDistance = 0f;
+            _eyes.Timestamp += deltaTime;
+            _eyes.FinishUpdate();
+        }
+
+        /// <summary>
+        /// Updates our mouth tracking data.
+        /// </summary>
+        /// <param name="deltaTime"></param>
+        void UpdateMouth(float deltaTime)
+        {
+            _mouth.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
+            _mouth.IsTracking = Engine.Current.InputInterface.VR_Active;
+
+            _mouth.JawOpen = expressions[FBExpression.Jaw_Drop];
 
             var jawHorizontal = expressions[FBExpression.Jaw_Sideways_Right] - expressions[FBExpression.Jaw_Sideways_Left];
             var jawForward = expressions[FBExpression.Jaw_Thrust];
             var jawDown = expressions[FBExpression.Lips_Toward] + expressions[FBExpression.Jaw_Drop];
 
-            mouth.Jaw = new float3(
+            _mouth.Jaw = new float3(
                 jawHorizontal,
                 jawForward,
                 jawDown
             );
 
-            mouth.LipUpperLeftRaise = expressions[FBExpression.Upper_Lip_Raiser_L];
-            mouth.LipUpperRightRaise = expressions[FBExpression.Upper_Lip_Raiser_R];
-            mouth.LipLowerLeftRaise = expressions[FBExpression.Lower_Lip_Depressor_L];
-            mouth.LipLowerRightRaise = expressions[FBExpression.Lower_Lip_Depressor_R];
+            _mouth.LipUpperLeftRaise = expressions[FBExpression.Upper_Lip_Raiser_L];
+            _mouth.LipUpperRightRaise = expressions[FBExpression.Upper_Lip_Raiser_R];
+            _mouth.LipLowerLeftRaise = expressions[FBExpression.Lower_Lip_Depressor_L];
+            _mouth.LipLowerRightRaise = expressions[FBExpression.Lower_Lip_Depressor_R];
 
-            mouth.LipUpperHorizontal = expressions[FBExpression.Mouth_Right] - expressions[FBExpression.Mouth_Left];
-            mouth.LipLowerHorizontal = expressions[FBExpression.Mouth_Right] - expressions[FBExpression.Mouth_Left];
+            _mouth.LipUpperHorizontal = expressions[FBExpression.Mouth_Right] - expressions[FBExpression.Mouth_Left];
+            _mouth.LipLowerHorizontal = expressions[FBExpression.Mouth_Right] - expressions[FBExpression.Mouth_Left];
 
-            mouth.MouthLeftSmileFrown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L];
-            mouth.MouthRightSmileFrown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R];
+            _mouth.MouthLeftSmileFrown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L];
+            _mouth.MouthRightSmileFrown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R];
 
-            mouth.MouthPout = expressions[FBExpression.Lip_Pucker_L] + expressions[FBExpression.Lip_Pucker_R];
+            _mouth.MouthPout = expressions[FBExpression.Lip_Pucker_L] + expressions[FBExpression.Lip_Pucker_R];
 
-            mouth.LipTopOverturn = expressions[FBExpression.Lip_Funneler_RT] + expressions[FBExpression.Lip_Funneler_LT];
-            mouth.LipBottomOverturn = expressions[FBExpression.Lip_Funneler_RB] + expressions[FBExpression.Lip_Funneler_LB];
+            _mouth.LipTopOverturn = expressions[FBExpression.Lip_Funneler_RT] + expressions[FBExpression.Lip_Funneler_LT];
+            _mouth.LipBottomOverturn = expressions[FBExpression.Lip_Funneler_RB] + expressions[FBExpression.Lip_Funneler_LB];
 
-            mouth.LipTopOverUnder = -(expressions[FBExpression.Lip_Suck_RT] + expressions[FBExpression.Lip_Suck_LT]);
-            mouth.LipBottomOverUnder = expressions[FBExpression.Chin_Raiser_B] - (expressions[FBExpression.Lip_Suck_RB] + expressions[FBExpression.Lip_Suck_LB]);
+            _mouth.LipTopOverUnder = -(expressions[FBExpression.Lip_Suck_RT] + expressions[FBExpression.Lip_Suck_LT]);
+            _mouth.LipBottomOverUnder = expressions[FBExpression.Chin_Raiser_B] - (expressions[FBExpression.Lip_Suck_RB] + expressions[FBExpression.Lip_Suck_LB]);
 
-            mouth.CheekLeftPuffSuck = expressions[FBExpression.Cheek_Puff_L];
-            mouth.CheekRightPuffSuck = expressions[FBExpression.Cheek_Puff_R];
+            _mouth.CheekLeftPuffSuck = expressions[FBExpression.Cheek_Puff_L];
+            _mouth.CheekRightPuffSuck = expressions[FBExpression.Cheek_Puff_R];
 
-            mouth.CheekLeftPuffSuck -= expressions[FBExpression.Cheek_Suck_L];
-            mouth.CheekRightPuffSuck -= expressions[FBExpression.Cheek_Suck_R];
-
+            _mouth.CheekLeftPuffSuck -= expressions[FBExpression.Cheek_Suck_L];
+            _mouth.CheekRightPuffSuck -= expressions[FBExpression.Cheek_Suck_R];
         }
 
-        public float GetFaceExpression(int expressionIndex)
-        {
-            return expressions[expressionIndex];
-        }
-
+        #endregion
         public enum FBEye
         {
             Left,

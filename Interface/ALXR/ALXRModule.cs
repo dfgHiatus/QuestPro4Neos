@@ -442,8 +442,9 @@ namespace QuestProModule.ALXR
 
             if (eye.IsTracking)
             {
-                eye.UpdateWithRotation(data.rotation);
-                eye.Openness = MathX.FilterInvalid(eye.Openness, 0.0f);
+                eye.UpdateWithRotation(MathX.Slerp(floatQ.Identity, data.rotation, QuestProMod.EyeMoveMult));
+                eye.Openness = MathX.Pow(MathX.FilterInvalid(data.open, 0.0f), QuestProMod.EyeOpenExponent);
+                eye.Widen = data.wide * QuestProMod.EyeWideMult;
             }
         }
 
@@ -463,20 +464,16 @@ namespace QuestProModule.ALXR
             _eyes.LeftEye.IsTracking = leftEyeData.isValid;
             _eyes.LeftEye.RawPosition = leftEyeData.position;
             _eyes.LeftEye.PupilDiameter = 0.004f;
-            _eyes.LeftEye.Widen = leftEyeData.wide;
             _eyes.LeftEye.Squeeze = leftEyeData.squeeze;
-            _eyes.LeftEye.Openness = leftEyeData.open;
-            _eyes.LeftEye.Frown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L];
+            _eyes.LeftEye.Frown = expressions[FBExpression.Lip_Corner_Puller_L] - expressions[FBExpression.Lip_Corner_Depressor_L] * QuestProMod.EyeExpressionMult;
 
             UpdateEye(_eyes.LeftEye, leftEyeData);
 
             _eyes.RightEye.IsTracking = rightEyeData.isValid;
             _eyes.RightEye.RawPosition = rightEyeData.position;
             _eyes.RightEye.PupilDiameter = 0.004f;
-            _eyes.RightEye.Widen = rightEyeData.wide;
             _eyes.RightEye.Squeeze = rightEyeData.squeeze;
-            _eyes.RightEye.Openness = rightEyeData.open;
-            _eyes.RightEye.Frown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R];
+            _eyes.RightEye.Frown = expressions[FBExpression.Lip_Corner_Puller_R] - expressions[FBExpression.Lip_Corner_Depressor_R] * QuestProMod.EyeExpressionMult;
 
             UpdateEye(_eyes.RightEye, rightEyeData);
 

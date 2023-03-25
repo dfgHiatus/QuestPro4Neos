@@ -19,18 +19,28 @@ namespace QuestProModule
 
         [AutoRegisterConfigKey]
         private readonly static ModConfigurationKey<float> EyeWideMultiplier = new ModConfigurationKey<float>("quest_pro_eye_wide_multiplier", "Multiplier to apply to eye wideness.  Can be updated at runtime.  Useful for multiplying the amount your eyes can widen by.", () => 1.0f);
-        
+
+        [AutoRegisterConfigKey]
+        private readonly static ModConfigurationKey<float> EyeMovementMultiplier = new ModConfigurationKey<float>("quest_pro_eye_movement_multiplier", "Multiplier to adjust the movement range of the user's eyes.  Can be updated at runtime.", () => 1.0f);
+
+        [AutoRegisterConfigKey]
+        private readonly static ModConfigurationKey<float> EyeExpressionMultiplier = new ModConfigurationKey<float>("quest_pro_eye_expression_multiplier", "Multiplier to adjust the range of the user's eye expressions.  Can be updated at runtime.", () => 1.0f);
+
+
         public static ALXRModule qpm;
 
         static ModConfiguration _config;
 
         public static float EyeOpenExponent = 1.0f;
         public static float EyeWideMult = 1.0f;
+        public static float EyeMoveMult = 1.0f;
+        public static float EyeExpressionMult = 1.0f;
 
         public override string Name => "QuestPro4Neos";
 		public override string Author => "dfgHiatus & Geenz";
 		public override string Version => "1.0.0";
 		public override string Link => "https://github.com/dfgHiatus/QuestPro4Neos";
+
 		public override void OnEngineInit()
 		{
             _config = GetConfiguration();
@@ -66,7 +76,6 @@ namespace QuestProModule
 
         private void OnConfigurationChanged(ConfigurationChangedEvent @event)
         {
-            if (@event.Label == "NeosModSettings variable change") return;
             UniLog.Log($"Var changed! {@event.Label}");
             if (@event.Key == EyeOpennessExponent)
             {
@@ -77,12 +86,26 @@ namespace QuestProModule
                 }
             }
 
-            if (@event.Key == EyeOpennessExponent)
+            if (@event.Key == EyeWideMultiplier)
             {
                 float wideMult = 1.0f;
                 if (@event.Config.TryGetValue(EyeWideMultiplier, out wideMult))
                 {
                     EyeWideMult = wideMult;
+                }
+            }
+
+            if (@event.Key == QuestProIP)
+            {
+                // Should probably re-initialize the device if this changes for whatever reason.
+            }
+
+            if (@event.Key == EyeMovementMultiplier)
+            {
+                float moveMult = 1.0f;
+                if (@event.Config.TryGetValue(EyeMovementMultiplier, out moveMult))
+                {
+                    EyeMoveMult = moveMult;
                 }
             }
         }

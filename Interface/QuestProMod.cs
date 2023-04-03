@@ -25,6 +25,8 @@ namespace QuestProModule
 
         [AutoRegisterConfigKey]
         private readonly static ModConfigurationKey<float> EyeExpressionMultiplier = new ModConfigurationKey<float>("quest_pro_eye_expression_multiplier", "Multiplier to adjust the range of the user's eye expressions.  Can be updated at runtime.", () => 1.0f);
+        [AutoRegisterConfigKey]
+        private readonly static ModConfigurationKey<bool> AutoStartALXRClient = new ModConfigurationKey<bool>("quest_pro_alxr_auto_start", "Auto-starts built-in ALXR if it's not presently running.  Defaults to off.", () => false);
 
 
         public static ALXRModule qpm;
@@ -35,6 +37,7 @@ namespace QuestProModule
         public static float EyeWideMult = 1.0f;
         public static float EyeMoveMult = 1.0f;
         public static float EyeExpressionMult = 1.0f;
+        public static bool AutoStartALXR = false;
 
         public override string Name => "QuestPro4Neos";
 		public override string Author => "dfgHiatus & Geenz";
@@ -56,27 +59,18 @@ namespace QuestProModule
         {
             public static void Postfix(InputInterface __instance)
             {
-                try
-                {
-                    qpm = new ALXRModule();
+                qpm = new ALXRModule();
 
-                    qpm.Initialize(_config.GetValue(QuestProIP));
+                qpm.Initialize(_config.GetValue(QuestProIP));
 
-                    __instance.RegisterInputDriver(qpm);
+                __instance.RegisterInputDriver(qpm);
 
-                    Engine.Current.OnShutdown += () => qpm.Teardown();
-                }
-                catch (Exception ex)
-                {
-                    Warn("Module failed to initiallize.");
-                    Warn(ex.ToString());
-                }
+                Engine.Current.OnShutdown += () => qpm.Teardown();
             }
         }
 
         private void OnConfigurationChanged(ConfigurationChangedEvent @event)
         {
-            UniLog.Log($"Var changed! {@event.Label}");
             if (@event.Key == EyeOpennessExponent)
             {
                 float openExp = 1.0f;
@@ -106,6 +100,15 @@ namespace QuestProModule
                 if (@event.Config.TryGetValue(EyeMovementMultiplier, out moveMult))
                 {
                     EyeMoveMult = moveMult;
+                }
+            }
+
+            if (@event.Key == AutoStartALXRClient)
+            {
+                bool autostart = false;
+                if (@event.Config.TryGetValue(AutoStartALXRClient, out autostart))
+                {
+                    AutoStartALXR = autostart;
                 }
             }
         }

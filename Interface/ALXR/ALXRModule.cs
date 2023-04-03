@@ -2,6 +2,7 @@
 using FrooxEngine;
 using FrooxEngine.LogiX;
 using System;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -9,7 +10,7 @@ using System.Threading.Tasks;
 
 namespace QuestProModule.ALXR
 {
-    public class ALXRModule : IQuestProModule, IInputDriver
+    public class ALXRModule : IInputDriver
     {
         private IPAddress localAddr;
         private const int DEFAULT_PORT = 13191;
@@ -34,41 +35,53 @@ namespace QuestProModule.ALXR
         private Eyes _eyes;
         #endregion
 
-        public async Task<bool> Initialize(string ipconfig)
+        #region ALXR VARIABLES
+        private Process _alxrProcess;
+
+        bool IsALXRRunning
         {
-            try
+            get
             {
-                localAddr = IPAddress.Parse(ipconfig);
-
-                cancellationTokenSource = new CancellationTokenSource();
-
-                UniLog.Log("Attempting to connect to TCP socket.");
-                var connected = await ConnectToTCP(); // This should not block the main thread anymore...?
-            } 
-            catch (Exception e)
-            {
-                UniLog.Error(e.Message);
-                return false;
+                Process[] pname = Process.GetProcessesByName("alxr-client");
+                UniLog.Log($"ALXR processes: {pname.Length.ToString()}");
+                return pname.Length > 0;
             }
-
-            if (connected) 
-            {
-                tcpThread = new Thread(Update);
-                tcpThread.Start();
-                return true;
-            }
-
-            return false;
         }
 
-        private async Task<bool> ConnectToTCP()
+        bool StartALXR()
+        {
+            // Attempt to start ALXR.
+            _alxrProcess = new Process();
+            string neosPath = System.Reflection.Assembly.GetExecutingAssembly().Location;
+            neosPath = System.IO.Path.GetDirectoryName(neosPath);
+
+            _alxrProcess.StartInfo.FileName = neosPath + "/alxr_client_windows/alxr-client.exe";
+            _alxrProcess.StartInfo.Arguments = "--no-alvr-server --no-bindings";
+
+            UniLog.Log($"Starting ALXR at: {_alxrProcess.StartInfo.FileName}");
+
+            return _alxrProcess.Start();
+        }
+        #endregion
+
+        public void Initialize(string ipconfig)
+        {
+            localAddr = IPAddress.Parse(ipconfig);
+
+            cancellationTokenSource = new CancellationTokenSource();
+            
+            tcpThread = new Thread(Update);
+            tcpThread.Start();
+        }
+
+        private bool ConnectToTCP()
         {
             try
             {
                 client = new TcpClient();
                 UniLog.Log($"Trying to establish a Quest Pro connection at {localAddr}:{DEFAULT_PORT}...");
 
-                await client.ConnectAsync(localAddr, DEFAULT_PORT);
+                client.Connect(localAddr, DEFAULT_PORT);
 
                 if (client.Connected)
                 {
@@ -78,11 +91,6 @@ namespace QuestProModule.ALXR
                     connected = true;
 
                     return true;
-                } 
-                else
-                {
-                    UniLog.Error("Couldn't connect!");
-                    return false;
                 }
             }
             catch (Exception e)
@@ -99,56 +107,64 @@ namespace QuestProModule.ALXR
                 try
                 {
                     // Attempt reconnection if needed
-                    if (!connected || stream == null)
+                    if (!connected)
                     {
-                        ConnectToTCP().RunSynchronously();
+                        if (!IsALXRRunning)
+                        {
+                            StartALXR();
+                            Thread.Sleep(1000);
+                        }
+
+                        ConnectToTCP();
                     }
+
 
                     // If the connection was unsuccessful, wait a bit and try again
                     if (stream == null)
                     {
-                        UniLog.Warning("Didn't reconnect to the Quest Pro just yet! Trying again...");
-                        return;
+                        connected = false;
                     }
 
                     if (!stream.CanRead)
                     {
-                        UniLog.Warning("Can't read from the Quest Pro network stream just yet! Trying again...");
-                        return;
-                    }
-
-                    int offset = 0;
-                    int readBytes;
-                    do
-                    {
-                        readBytes = stream.Read(rawExpressions, offset, rawExpressions.Length - offset);
-                        offset += readBytes;
-                    }
-                    while (readBytes > 0 && offset < rawExpressions.Length);
-
-                    if (offset < rawExpressions.Length && connected)
-                    {
-                        UniLog.Warning("End of stream! Reconnecting...");
-                        Thread.Sleep(1000);
                         connected = false;
-                        try
-                        {
-                            stream.Close();
-                        }
-                        catch (SocketException e)
-                        {
-                            UniLog.Error(e.Message);
-                            Thread.Sleep(1000);
-                        }
                     }
 
-                    // We receive information from the stream as a byte array 63*4 bytes long, since floats are 32 bits long and we have 63 expressions.
-                    // We then need to convert these bytes to a floats. I've opted to use Buffer.BlockCopy instead of BitConverter.ToSingle, since it's faster.
-                    // Future note: Testing this against Array.Copy() doesn't seem to show any difference in performance, so I'll stick to this
-                    Buffer.BlockCopy(rawExpressions, 0, expressions, 0, NATURAL_EXPRESSIONS_COUNT * 4 + (8 * 2 * 4));
+                    if (connected)
+                    {
+                        int offset = 0;
+                        int readBytes;
+                        do
+                        {
+                            readBytes = stream.Read(rawExpressions, offset, rawExpressions.Length - offset);
+                            offset += readBytes;
+                        }
+                        while (readBytes > 0 && offset < rawExpressions.Length);
 
-                    // Preprocess our expressions per Meta's Documentation
-                    PrepareUpdate();
+                        if (offset < rawExpressions.Length)
+                        {
+                            UniLog.Warning("End of stream! Reconnecting...");
+                            Thread.Sleep(1000);
+                            connected = false;
+                            try
+                            {
+                                stream.Close();
+                            }
+                            catch (SocketException e)
+                            {
+                                UniLog.Error(e.Message);
+                                Thread.Sleep(1000);
+                            }
+                        }
+
+                        // We receive information from the stream as a byte array 63*4 bytes long, since floats are 32 bits long and we have 63 expressions.
+                        // We then need to convert these bytes to a floats. I've opted to use Buffer.BlockCopy instead of BitConverter.ToSingle, since it's faster.
+                        // Future note: Testing this against Array.Copy() doesn't seem to show any difference in performance, so I'll stick to this
+                        Buffer.BlockCopy(rawExpressions, 0, expressions, 0, NATURAL_EXPRESSIONS_COUNT * 4 + (8 * 2 * 4));
+
+                        // Preprocess our expressions per Meta's Documentation
+                        PrepareUpdate();
+                    }
                 }
                 catch (SocketException e)
                 {
@@ -299,12 +315,28 @@ namespace QuestProModule.ALXR
         public void Teardown()
         {
             cancellationTokenSource.Cancel();
-            tcpThread.Abort();
+
+            if (tcpThread != null)
+                tcpThread.Abort();
+
             cancellationTokenSource.Dispose();
-            stream.Close();
-            stream.Dispose();
-            client.Close();
-            client.Dispose();
+
+            if (stream != null)
+            {
+                stream.Close();
+                stream.Dispose();
+            }
+
+            if (client != null)
+            {
+                client.Close();
+                client.Dispose();
+            }
+
+            if (_alxrProcess != null)
+            {
+                _alxrProcess.Close();
+            }
         }
 
         bool IsValid(float3 value) => IsValid(value.x) && IsValid(value.y) && IsValid(value.z);

@@ -63,7 +63,7 @@ public class QuestProMod : NeosMod
 
   public override string Name => "QuestPro4Neos";
   public override string Author => "dfgHiatus & Geenz & Earthmark";
-  public override string Version => "1.0.0";
+  public override string Version => "2.0.0";
   public override string Link => "https://github.com/dfgHiatus/QuestPro4Neos";
 
   public override void OnEngineInit()

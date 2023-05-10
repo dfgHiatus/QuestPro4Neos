@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using NeosModLoader;
 using FrooxEngine;
+using System.Threading;
 
 namespace QuestProModule;
 
@@ -8,7 +9,7 @@ public class QuestProMod : NeosMod
 {
   [AutoRegisterConfigKey] private static readonly ModConfigurationKey<int> AlvrListenPort =
     new("quest_pro_alvr_port",
-      "(Deprecated) The port alvr will communicate with, this should be VrcFaceTracking Osc mode in alvr.", () => DefaultPort);
+      "The port alvr will communicate with, this should be VrcFaceTracking Osc mode in alvr.", () => DefaultPort);
 
   [AutoRegisterConfigKey] private static readonly ModConfigurationKey<float> EyeOpennessExponent =
     new("quest_pro_eye_open_exponent",
@@ -30,18 +31,30 @@ public class QuestProMod : NeosMod
 
   [AutoRegisterConfigKey] private static readonly ModConfigurationKey<bool> AutoStartAlvrClient =
     new("quest_pro_alxr_auto_start",
-      "(Not yet supported) Auto-starts built-in ALXR if it's not presently running.  Defaults to off.", () => false);
+      "Auto-starts built-in ALXR if it's not presently running.  Defaults to off.", () => false);
+
+  [AutoRegisterConfigKey]
+  private static readonly ModConfigurationKey<string> AlvrClientName =
+    new("quest_pro_alxr_client_name",
+      "The name of the server to look for in the system process pool. Defaults to alxr-client",
+      () => "alxr-client");
 
   [AutoRegisterConfigKey] private static readonly ModConfigurationKey<string> AlvrClientPath =
     new("quest_pro_alxr_client_path",
-      "(Not yet supported) The path to the alvr server itself.  Defaults to {neos root}/alxr_client_windows/alxr-client.exe, this path is relative to the neos root.",
+      "The path to the alvr server itself.  Defaults to {neos root}/alxr_client_windows/alxr-client.exe, this path is relative to the neos root.",
       () => "./alxr_client_windows/alxr-client.exe");
+
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<string> AlvrArguments =
+    new("quest_pro_alxr_arguments",
+      "Arguments to start alvr with.  Defaults to --no-alvr-server --no-bindings",
+      () => "--no-alvr-server --no-bindings");
 
   private static ModConfiguration _config;
 
   private static SyncCell<FbMessage> _store;
   private static AlvrConnection _connection;
   private static FbInputDriver _driver;
+  private static AlvrMonitor _monitor;
 
   /// <summary>
   /// The default port from ALVRs VRCFaceTracking OCS connection
@@ -72,8 +85,28 @@ public class QuestProMod : NeosMod
       _driver = new FbInputDriver(_store);
       __instance.RegisterInputDriver(_driver);
 
-      Engine.Current.OnShutdown += () => _connection.Dispose();
+      if (_config.TryGetValue(AutoStartAlvrClient, out var enable) && enable)
+      {
+        StartMonitor();
+      }
+
+      Engine.Current.OnShutdown += () =>
+      {
+        _connection?.Dispose();
+        _monitor?.Dispose();
+      };
     }
+  }
+
+  private static void StartMonitor()
+  {
+    _monitor?.Dispose();
+    _monitor = new AlvrMonitor
+    {
+      ClientName = _config.TryGetValue(AlvrClientName, out var name) ? name : null,
+      ClientPath = _config.TryGetValue(AlvrClientPath, out var path) ? path : null,
+      Arguments = _config.TryGetValue(AlvrArguments, out var args) ? args : null,
+    };
   }
 
   private void OnConfigurationChanged(ConfigurationChangedEvent @event)
@@ -112,15 +145,47 @@ public class QuestProMod : NeosMod
 
     if (@event.Key == AutoStartAlvrClient)
     {
-      if (@event.Config.TryGetValue(AutoStartAlvrClient, out var autoStart))
+      if (@event.Config.TryGetValue(AutoStartAlvrClient, out var autoStart) && autoStart)
       {
+        StartMonitor();
+      }
+      else
+      {
+        _monitor?.Dispose();
+        _monitor = null;
+      }
+    }
+
+    if (@event.Key == AlvrClientName)
+    {
+      if (@event.Config.TryGetValue(AlvrClientName, out var clientName))
+      {
+        if (_monitor != null)
+        {
+          _monitor.ClientName = clientName;
+        }
       }
     }
 
     if (@event.Key == AlvrClientPath)
     {
-      if (@event.Config.TryGetValue(AlvrClientPath, out var autoStart))
+      if (@event.Config.TryGetValue(AlvrClientPath, out var clientPath))
       {
+        if (_monitor != null)
+        {
+          _monitor.ClientPath = clientPath;
+        }
+      }
+    }
+
+    if (@event.Key == AlvrArguments)
+    {
+      if (@event.Config.TryGetValue(AlvrArguments, out var arguments))
+      {
+        if (_monitor != null)
+        {
+          _monitor.Arguments = arguments;
+        }
       }
     }
 

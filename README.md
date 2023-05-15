@@ -14,4 +14,4 @@ Related issues on the Neos Github:
 
 If you want to verify that the mod is working you can check your Neos logs, or create an EmptyObject with an AvatarRawEyeData/AvatarRawMouthData Component (Found under Users -> Common Avatar System -> Face -> AvatarRawEyeData/AvatarRawMouthData).
 
-A big thanks to [Geenz](https://github.com/Geenz) for their contributions and testing this mod, not owning the headset myself this would not be possible without them. Check out their fork [here](https://github.com/Geenz/QuestPro4Neos)
+A big thanks to [Geenz](https://github.com/Geenz) and [Earthmark](https://github.com/Earthmark) for their contributions and testing this mod, not owning the headset myself this would not be possible without them. Check out Geenz's fork [here](https://github.com/Geenz/QuestPro4Neos)

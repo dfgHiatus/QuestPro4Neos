@@ -8,7 +8,7 @@ Related issues on the Neos Github:
 
 ## Usage
 1. Install [NeosModLoader](https://github.com/zkxs/NeosModLoader).
-1. Download the [latest release](https://github.com/dfgHiatus/QuestPro4Neos/releases/latest) of this mod and place it in your mods folder. This folder should be at `C:\Program Files (x86)\Steam\steamapps\common\NeosVR\nml_mods` for a default install. You can create it if it's missing, or if you launch the game once with NeosModLoader.
+1. Download the [latest release](https://github.com/dfgHiatus/QuestPro4Neos/releases/latest) of this mod and place it in your NeosVR install folder. This folder should be at `C:\Program Files (x86)\Steam\steamapps\common\NeosVR\` for a default install. Extract the archive, ensuring that `OSCCore` is present and `QuestProModule` is present in `nml_mods`. his folder should be at `C:\Program Files (x86)\Steam\steamapps\common\NeosVR\nml_mods` for a default install, or you can create this folder if it is missing.
 1. Follow the instructions to install [ALXR](https://docs.google.com/document/d/1MFGxIrdh7U2tq368X_UthryceIsapwz6C7hydmnaWQM/edit) and run it.
 1. Start the game.
 

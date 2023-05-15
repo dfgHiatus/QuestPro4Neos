@@ -9,7 +9,7 @@ Related issues on the Neos Github:
 ## Usage
 1. Install [NeosModLoader](https://github.com/zkxs/NeosModLoader).
 1. Download the [latest release](https://github.com/dfgHiatus/QuestPro4Neos/releases/latest) of this mod and place it in your NeosVR install folder. This folder should be at `C:\Program Files (x86)\Steam\steamapps\common\NeosVR\` for a default install. Extract the archive, ensuring that `OSCCore` is present and `QuestProModule` is present in `nml_mods`. his folder should be at `C:\Program Files (x86)\Steam\steamapps\common\NeosVR\nml_mods` for a default install, or you can create this folder if it is missing.
-1. Follow the instructions to install [ALXR](https://docs.google.com/document/d/1MFGxIrdh7U2tq368X_UthryceIsapwz6C7hydmnaWQM/edit) and run it.
+1. Install [ALVR v20](https://github.com/alvr-org/ALVR-nightly/releases) and run it.
 1. Start the game.
 
 If you want to verify that the mod is working you can check your Neos logs, or create an EmptyObject with an AvatarRawEyeData/AvatarRawMouthData Component (Found under Users -> Common Avatar System -> Face -> AvatarRawEyeData/AvatarRawMouthData).

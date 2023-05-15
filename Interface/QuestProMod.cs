@@ -1,116 +1,201 @@
 ﻿using HarmonyLib;
 using NeosModLoader;
 using FrooxEngine;
-using System.Net;
-using QuestProModule.ALXR;
-using BaseX;
-using System;
-using FrooxEngine.UIX;
+using System.Threading;
 
-namespace QuestProModule
+namespace QuestProModule;
+
+public class QuestProMod : NeosMod
 {
-    public class QuestProMod : NeosMod
-	{
-		[AutoRegisterConfigKey]
-		private readonly static ModConfigurationKey<string> QuestProIP = new ModConfigurationKey<string>("quest_pro_IP", "Quest Pro IP. This can be found in ALXR's settings, requires a restart to take effect", () => "127.0.0.1");
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<int> AlvrListenPort =
+    new("quest_pro_alvr_port",
+      "The port alvr will communicate with, this should be VrcFaceTracking Osc mode in alvr.", () => DefaultPort);
 
-        [AutoRegisterConfigKey]
-        private readonly static ModConfigurationKey<float> EyeOpennessExponent = new ModConfigurationKey<float>("quest_pro_eye_open_exponent", "Exponent to apply to eye openness.  Can be updated at runtime.  Useful for applying different curves for how open your eyes are.", () => 1.0f);
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<float> EyeOpennessExponent =
+    new("quest_pro_eye_open_exponent",
+      "Exponent to apply to eye openness.  Can be updated at runtime.  Useful for applying different curves for how open your eyes are.",
+      () => 1.0f);
 
-        [AutoRegisterConfigKey]
-        private readonly static ModConfigurationKey<float> EyeWideMultiplier = new ModConfigurationKey<float>("quest_pro_eye_wide_multiplier", "Multiplier to apply to eye wideness.  Can be updated at runtime.  Useful for multiplying the amount your eyes can widen by.", () => 1.0f);
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<float> EyeWideMultiplier =
+    new("quest_pro_eye_wide_multiplier",
+      "Multiplier to apply to eye wideness.  Can be updated at runtime.  Useful for multiplying the amount your eyes can widen by.",
+      () => 1.0f);
 
-        [AutoRegisterConfigKey]
-        private readonly static ModConfigurationKey<float> EyeMovementMultiplier = new ModConfigurationKey<float>("quest_pro_eye_movement_multiplier", "Multiplier to adjust the movement range of the user's eyes.  Can be updated at runtime.", () => 1.0f);
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<float> EyeMovementMultiplier =
+    new("quest_pro_eye_movement_multiplier",
+      "Multiplier to adjust the movement range of the user's eyes.  Can be updated at runtime.", () => 1.0f);
 
-        [AutoRegisterConfigKey]
-        private readonly static ModConfigurationKey<float> EyeExpressionMultiplier = new ModConfigurationKey<float>("quest_pro_eye_expression_multiplier", "Multiplier to adjust the range of the user's eye expressions.  Can be updated at runtime.", () => 1.0f);
-        [AutoRegisterConfigKey]
-        private readonly static ModConfigurationKey<bool> AutoStartALXRClient = new ModConfigurationKey<bool>("quest_pro_alxr_auto_start", "Auto-starts built-in ALXR if it's not presently running.  Defaults to off.", () => false);
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<float> EyeExpressionMultiplier =
+    new("quest_pro_eye_expression_multiplier",
+      "Multiplier to adjust the range of the user's eye expressions.  Can be updated at runtime.", () => 1.0f);
 
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<bool> AutoStartAlvrClient =
+    new("quest_pro_alxr_auto_start",
+      "Auto-starts built-in ALXR if it's not presently running.  Defaults to off.", () => false);
 
-        public static ALXRModule qpm;
+  [AutoRegisterConfigKey]
+  private static readonly ModConfigurationKey<string> AlvrClientName =
+    new("quest_pro_alxr_client_name",
+      "The name of the server to look for in the system process pool. Defaults to alxr-client",
+      () => "alxr-client");
 
-        static ModConfiguration _config;
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<string> AlvrClientPath =
+    new("quest_pro_alxr_client_path",
+      "The path to the alvr server itself.  Defaults to {neos root}/alxr_client_windows/alxr-client.exe, this path is relative to the neos root.",
+      () => "./alxr_client_windows/alxr-client.exe");
 
-        public static float EyeOpenExponent = 1.0f;
-        public static float EyeWideMult = 1.0f;
-        public static float EyeMoveMult = 1.0f;
-        public static float EyeExpressionMult = 1.0f;
-        public static bool AutoStartALXR = false;
+  [AutoRegisterConfigKey] private static readonly ModConfigurationKey<string> AlvrArguments =
+    new("quest_pro_alxr_arguments",
+      "Arguments to start alvr with.  Defaults to --no-alvr-server --no-bindings",
+      () => "--no-alvr-server --no-bindings");
 
-        public override string Name => "QuestPro4Neos";
-		public override string Author => "dfgHiatus & Geenz";
-		public override string Version => "1.0.0";
-		public override string Link => "https://github.com/dfgHiatus/QuestPro4Neos";
+  private static ModConfiguration _config;
 
-		public override void OnEngineInit()
-		{
-            _config = GetConfiguration();
+  private static SyncCell<FbMessage> _store;
+  private static AlvrConnection _connection;
+  private static FbInputDriver _driver;
+  private static AlvrMonitor _monitor;
 
-            _config.OnThisConfigurationChanged += OnConfigurationChanged;
+  /// <summary>
+  /// The default port from ALVRs VRCFaceTracking OCS connection
+  /// </summary>
+  private const int DefaultPort = 9620;
 
-            new Harmony("net.dfgHiatus.QuestPro4Neos").PatchAll();
-		}
+  public override string Name => "QuestPro4Neos";
+  public override string Author => "dfgHiatus & Geenz & Earthmark";
+  public override string Version => "2.0.0";
+  public override string Link => "https://github.com/dfgHiatus/QuestPro4Neos";
 
-        [HarmonyPatch(typeof(InputInterface), MethodType.Constructor)]
-        [HarmonyPatch(new Type[] { typeof(Engine) })]
-        public class InputInterfaceCtorPatch
-        {
-            public static void Postfix(InputInterface __instance)
-            {
-                qpm = new ALXRModule();
+  public override void OnEngineInit()
+  {
+    _config = GetConfiguration();
+    _config.OnThisConfigurationChanged += OnConfigurationChanged;
 
-                qpm.Initialize(_config.GetValue(QuestProIP));
+    new Harmony("net.dfgHiatus.QuestPro4Neos").PatchAll();
+  }
 
-                __instance.RegisterInputDriver(qpm);
+  [HarmonyPatch(typeof(InputInterface), MethodType.Constructor)]
+  [HarmonyPatch(new[] { typeof(Engine) })]
+  public class InputInterfaceCtorPatch
+  {
+    public static void Postfix(InputInterface __instance)
+    {
+      _store = new SyncCell<FbMessage>();
+      _connection = new AlvrConnection(_config.TryGetValue(AlvrListenPort, out var port) ? port : DefaultPort, _store);
+      _driver = new FbInputDriver(_store);
+      __instance.RegisterInputDriver(_driver);
 
-                Engine.Current.OnShutdown += () => qpm.Teardown();
-            }
-        }
+      if (_config.TryGetValue(AutoStartAlvrClient, out var enable) && enable)
+      {
+        StartMonitor();
+      }
 
-        private void OnConfigurationChanged(ConfigurationChangedEvent @event)
-        {
-            if (@event.Key == EyeOpennessExponent)
-            {
-                float openExp = 1.0f;
-                if (@event.Config.TryGetValue(EyeOpennessExponent, out openExp))
-                {
-                    EyeOpenExponent = openExp;
-                }
-            }
-
-            if (@event.Key == EyeWideMultiplier)
-            {
-                float wideMult = 1.0f;
-                if (@event.Config.TryGetValue(EyeWideMultiplier, out wideMult))
-                {
-                    EyeWideMult = wideMult;
-                }
-            }
-
-            if (@event.Key == QuestProIP)
-            {
-                // Should probably re-initialize the device if this changes for whatever reason.
-            }
-
-            if (@event.Key == EyeMovementMultiplier)
-            {
-                float moveMult = 1.0f;
-                if (@event.Config.TryGetValue(EyeMovementMultiplier, out moveMult))
-                {
-                    EyeMoveMult = moveMult;
-                }
-            }
-
-            if (@event.Key == AutoStartALXRClient)
-            {
-                bool autostart = false;
-                if (@event.Config.TryGetValue(AutoStartALXRClient, out autostart))
-                {
-                    AutoStartALXR = autostart;
-                }
-            }
-        }
+      Engine.Current.OnShutdown += () =>
+      {
+        _connection?.Dispose();
+        _monitor?.Dispose();
+      };
     }
+  }
+
+  private static void StartMonitor()
+  {
+    _monitor?.Dispose();
+    _monitor = new AlvrMonitor
+    {
+      ClientName = _config.TryGetValue(AlvrClientName, out var name) ? name : null,
+      ClientPath = _config.TryGetValue(AlvrClientPath, out var path) ? path : null,
+      Arguments = _config.TryGetValue(AlvrArguments, out var args) ? args : null,
+    };
+  }
+
+  private void OnConfigurationChanged(ConfigurationChangedEvent @event)
+  {
+    if (@event.Key == EyeOpennessExponent)
+    {
+      if (@event.Config.TryGetValue(EyeOpennessExponent, out var openExp))
+      {
+        _driver.EyeOpenExponent = openExp;
+      }
+    }
+
+    if (@event.Key == EyeWideMultiplier)
+    {
+      if (@event.Config.TryGetValue(EyeWideMultiplier, out var wideMulti))
+      {
+        _driver.EyeWideMulti = wideMulti;
+      }
+    }
+
+    if (@event.Key == EyeMovementMultiplier)
+    {
+      if (@event.Config.TryGetValue(EyeMovementMultiplier, out var moveMulti))
+      {
+        _driver.EyeMoveMulti = moveMulti;
+      }
+    }
+
+    if (@event.Key == EyeExpressionMultiplier)
+    {
+      if (@event.Config.TryGetValue(EyeExpressionMultiplier, out var eyeExpressionMulti))
+      {
+        _driver.EyeExpressionMulti = eyeExpressionMulti;
+      }
+    }
+
+    if (@event.Key == AutoStartAlvrClient)
+    {
+      if (@event.Config.TryGetValue(AutoStartAlvrClient, out var autoStart) && autoStart)
+      {
+        StartMonitor();
+      }
+      else
+      {
+        _monitor?.Dispose();
+        _monitor = null;
+      }
+    }
+
+    if (@event.Key == AlvrClientName)
+    {
+      if (@event.Config.TryGetValue(AlvrClientName, out var clientName))
+      {
+        if (_monitor != null)
+        {
+          _monitor.ClientName = clientName;
+        }
+      }
+    }
+
+    if (@event.Key == AlvrClientPath)
+    {
+      if (@event.Config.TryGetValue(AlvrClientPath, out var clientPath))
+      {
+        if (_monitor != null)
+        {
+          _monitor.ClientPath = clientPath;
+        }
+      }
+    }
+
+    if (@event.Key == AlvrArguments)
+    {
+      if (@event.Config.TryGetValue(AlvrArguments, out var arguments))
+      {
+        if (_monitor != null)
+        {
+          _monitor.Arguments = arguments;
+        }
+      }
+    }
+
+    if (@event.Key == AlvrListenPort)
+    {
+      if (@event.Config.TryGetValue(AlvrListenPort, out var listenPort))
+      {
+        _connection.Dispose();
+        _connection = new AlvrConnection(listenPort, _store);
+      }
+    }
+  }
 }

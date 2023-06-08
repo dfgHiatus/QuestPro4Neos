@@ -1,4 +1,5 @@
-﻿using OscCore;
+﻿using BaseX;
+using OscCore;
 using System;
 
 namespace QuestProModule;
@@ -10,9 +11,20 @@ public class FbMessage
   public readonly float[] Expressions = new float[NaturalExpressionsCount + 8 * 2];
 
   public void ParseOsc(OscMessageRaw message)
-  {
-    Array.Clear(Expressions, 0, Expressions.Length);
-    int index = 0;
+  {	
+	int index = 0;
+	if (message.Address == "/tracking/eye/left/Quat")
+	{
+	  Array.Clear(Expressions, FbExpression.LeftRot_x, 4);
+	  index = FbExpression.LeftRot_x;
+	} else if (message.Address == "/tracking/eye/right/Quat")
+	{
+	  Array.Clear(Expressions, FbExpression.RightRot_x, 4);
+	  index = FbExpression.RightRot_x;
+	} else
+	{
+	  Array.Clear(Expressions, 0, 63);
+	}
     foreach (var arg in message)
     {
       // this osc library is strange.
@@ -22,11 +34,13 @@ public class FbMessage
       index++;
     }
 
-    // Clear the rest if it wasn't long enough for some reason.
-    for (; index < Expressions.Length; index++)
-    {
-      Expressions[index] = 0.0f;
-    }
+    //// Clear the rest if it wasn't long enough for some reason.
+    //for (; index < Expressions.Length; index++)
+    //{
+    //  Expressions[index] = 0.0f;
+    //}
+
+	// Im not sure why this was done, but what I am sure of is that this breaks the eye look by setting it to 0
 
     PrepareUpdate();
   }

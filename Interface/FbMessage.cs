@@ -1,4 +1,5 @@
-﻿using OscCore;
+﻿using BaseX;
+using OscCore;
 using System;
 
 namespace QuestProModule;
@@ -8,28 +9,64 @@ public class FbMessage
   private const int NaturalExpressionsCount = 63;
   private const float SranipalNormalizer = 0.75f;
   public readonly float[] Expressions = new float[NaturalExpressionsCount + 8 * 2];
+	public readonly float[] ExpressionsBuffer = new float[NaturalExpressionsCount + 8 * 2];
+	private object expressionsLock = new object();
+	private int[] messageCount = new int[3]; // To track the number of messages received for each address
 
-  public void ParseOsc(OscMessageRaw message)
-  {
-    Array.Clear(Expressions, 0, Expressions.Length);
-    int index = 0;
+	public void ParseOsc(OscMessageRaw message)
+  {	
+		int index = 0;
+		if (message.Address == "/tracking/eye/left/Quat")
+		{
+			Array.Clear(ExpressionsBuffer, FbExpression.LeftRot_w, 4);
+			index = FbExpression.LeftRot_w;
+		} else if (message.Address == "/tracking/eye/right/Quat")
+		{
+			Array.Clear(ExpressionsBuffer, FbExpression.RightRot_w, 4);
+			index = FbExpression.RightRot_w;
+		} else
+		{
+			Array.Clear(ExpressionsBuffer, 0, 63);
+		}
     foreach (var arg in message)
     {
       // this osc library is strange.
       var localArg = arg;
-      Expressions[index] = message.ReadFloat(ref localArg);
+			ExpressionsBuffer[index] = message.ReadFloat(ref localArg);
 
       index++;
     }
 
-    // Clear the rest if it wasn't long enough for some reason.
-    for (; index < Expressions.Length; index++)
-    {
-      Expressions[index] = 0.0f;
-    }
+		//// Clear the rest if it wasn't long enough for some reason.
+		//for (; index < ExpressionsBuffer.Length; index++)
+		//{
+		//  ExpressionsBuffer[index] = 0.0f;
+		//}
 
-    PrepareUpdate();
-  }
+		// Im not sure why this was done, but what I am sure of is that this breaks the eye look by setting it to 0
+
+		// Check if all three messages have been received
+		if (message.Address == "/tracking/eye/left/Quat" || message.Address == "/tracking/eye/right/Quat" || message.Address == "/tracking/face_fb")
+		{
+			int messageIndex = message.Address == "/tracking/eye/left/Quat" ? 0 : message.Address == "/tracking/eye/right/Quat" ? 1 : 2;
+
+			lock (expressionsLock)
+			{
+				messageCount[messageIndex]++;
+
+				// If all three messages have been received, copy the results to the ExpressionsBuffer
+				if (messageCount[0] > 0 && messageCount[1] > 0 && messageCount[2] > 0)
+				{
+					Array.Copy(ExpressionsBuffer, Expressions, Expressions.Length);
+					messageCount[0] = 0;
+					messageCount[1] = 0;
+					messageCount[2] = 0;
+
+					PrepareUpdate();
+				}
+			}
+		}
+	}
 
   private static bool FloatNear(float f1, float f2) => Math.Abs(f1 - f2) < 0.0001;
 

@@ -197,17 +197,18 @@ public class FbInputDriver : IInputDriver
     _mouth.IsDeviceActive = Engine.Current.InputInterface.VR_Active;
     _mouth.IsTracking = Engine.Current.InputInterface.VR_Active;
 
-    _mouth.JawOpen = _c.Expressions[FbExpression.Jaw_Drop];
+    _mouth.JawOpen = _c.Expressions[FbExpression.Jaw_Drop] - _c.Expressions[FbExpression.Lips_Toward];
+	
 
     var jawHorizontal = _c.Expressions[FbExpression.Jaw_Sideways_Right] -
                         _c.Expressions[FbExpression.Jaw_Sideways_Left];
     var jawForward = _c.Expressions[FbExpression.Jaw_Thrust];
-    var jawDown = _c.Expressions[FbExpression.Lips_Toward] + _c.Expressions[FbExpression.Jaw_Drop];
+    var jawDown = _c.Expressions[FbExpression.Jaw_Drop];
 
     _mouth.Jaw = new float3(
       jawHorizontal,
-      jawForward,
-      jawDown
+      jawDown,
+      jawForward
     );
 
     _mouth.LipUpperLeftRaise = _c.Expressions[FbExpression.Upper_Lip_Raiser_L];

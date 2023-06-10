@@ -15,12 +15,12 @@ public class FbMessage
 	int index = 0;
 	if (message.Address == "/tracking/eye/left/Quat")
 	{
-	  Array.Clear(Expressions, FbExpression.LeftRot_x, 4);
-	  index = FbExpression.LeftRot_x;
+	  Array.Clear(Expressions, FbExpression.LeftRot_w, 4);
+	  index = FbExpression.LeftRot_w;
 	} else if (message.Address == "/tracking/eye/right/Quat")
 	{
-	  Array.Clear(Expressions, FbExpression.RightRot_x, 4);
-	  index = FbExpression.RightRot_x;
+	  Array.Clear(Expressions, FbExpression.RightRot_w, 4);
+	  index = FbExpression.RightRot_w;
 	} else
 	{
 	  Array.Clear(Expressions, 0, 63);
